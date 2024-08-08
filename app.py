@@ -37,42 +37,23 @@ def generate_frames(filename):
         yield "Error: Could not open video."
         return
 
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    # Output path for video with detected violence
-    output_path = os.path.join(video_dir, 'violence_' + os.path.splitext(filename)[0] + '.avi')
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Use XVID codec
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-
-    if not out.isOpened():
-        yield "Error: Could not open video writer."
-        return
-
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
 
-        # Run inference on the frame
-        results = model(frame,conf=0.5)
+        # Run inference on the frame with a confidence threshold
+        results = model(frame, conf=0.5)
         annotated_frame = results[0].plot()
 
         # Check if violence is detected in the current frame
         violence_detected = False
         for obj in results[0].boxes:
-            # Convert the tensor to an integer index
             class_index = int(obj.cls.item())
             class_name = results[0].names[class_index]
             if class_name == 'violence':
                 violence_detected = True
                 break
-
-        # Write the frame to the output video if violence is detected
-        if violence_detected:
-            logging.debug("Violence detected; writing frame")
-            out.write(annotated_frame)
 
         # Encode the frame as JPEG for streaming
         ret, buffer = cv2.imencode('.jpg', annotated_frame)
@@ -87,14 +68,10 @@ def generate_frames(filename):
         time.sleep(0.1)  # Adjust as needed for processing speed
 
     cap.release()
-    out.release()
-
 
 @app.route('/video_feed/<filename>')
 def video_feed(filename):
     return Response(generate_frames(filename), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)
